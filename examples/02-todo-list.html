@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>hctx — 02 Todo List</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 600px; margin: 2rem auto; }
+    section { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; }
+    h2 { margin-top: 0; }
+    button { padding: 0.4rem 1rem; cursor: pointer; }
+    input { padding: 0.4rem; width: 200px; }
+    code { background: #f0f0f0; padding: 0.1rem 0.3rem; border-radius: 3px; }
+    ul { padding-left: 1.2rem; }
+    .error { color: red; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <h1>02 — Todo List</h1>
+  <p>Reactivity, DSL combinators, event parameter, write traps.</p>
+
+  <!-- ============================================================
+       Section 1: Todo app with multi-property subscription
+       Shows details.trigger branching and the event parameter.
+       ============================================================ -->
+  <section>
+    <h2>Todo with subscriptions</h2>
+    <p>Uses <code>details.trigger</code> to branch: <code>hc:statechanged:items</code> vs <code>:input</code>.</p>
+
+    <div hctx="todo">
+      <!-- Subscribes to data.input — live-updates the preview as you type -->
+      <p>Preview: <span hc-effect="renderPreview on hc:statechanged"></span></p>
+
+      <!-- Subscribes to data.items — re-renders the list when items change -->
+      <ul hc-effect="renderList on hc:statechanged"></ul>
+
+      <!-- The "event" parameter lets the action read the input value -->
+      <input hc-action="setInput on input" placeholder="Type a todo..." />
+
+      <!-- "and" combinator: both addItem AND clearInput fire on click -->
+      <button hc-action="addItem and clearInput on click">Add</button>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       Section 2: DSL combinators
+       Demonstrates "and", "or", and ";" syntax.
+       ============================================================ -->
+  <section>
+    <h2>DSL combinators</h2>
+    <p><code>and</code> = multiple actions on one trigger.
+       <code>or</code> = one action on multiple triggers.
+       <code>;</code> = separate declarations.</p>
+
+    <div hctx="dsl">
+      <p>Log: <span hc-effect="renderLog on hc:statechanged"></span></p>
+
+      <!-- "and": both logA and logB fire on click -->
+      <button hc-action="logA and logB on click">and: A+B on click</button>
+
+      <!-- "or": logC fires on click OR mouseenter -->
+      <button hc-action="logC on click or mouseenter">or: C on click|enter</button>
+
+      <!-- ";": highlight on mouseenter, unhighlight on mouseleave -->
+      <button hc-action="highlight on mouseenter; unhighlight on mouseleave"
+              style="padding: 0.4rem 1rem">; hover me</button>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       Section 3: Write trap demonstration
+       Effects cannot mutate data by default. allowStateMutations
+       opts in.
+       ============================================================ -->
+  <section>
+    <h2>Write traps</h2>
+    <p>Default effects throw on write. <code>allowStateMutations</code> bypasses the trap.</p>
+
+    <div hctx="writeTrap">
+      <p>Trapped: <span hc-effect="trapped on a:test"></span></p>
+      <p>Allowed: <span hc-effect="allowed on a:test"></span></p>
+      <p class="error" hc-effect="showError on a:test"></p>
+      <button hc-action="test on click">Test write trap</button>
+    </div>
+  </section>
+
+  <script src="../dist/iife.global.js" defer></script>
+  <script>
+    document.addEventListener("hc:loaded", () => {
+
+      // --- Todo: multi-property subscription + event parameter ---
+      hctx.newCtx("todo", () => ({
+        data: { items: [], input: "" },
+        actions: {
+          // "event" — the DOM event that triggered this action
+          setInput: ({ data, event }) => {
+            data.input = event.target.value;
+          },
+          addItem: ({ data }) => {
+            if (data.input.trim()) {
+              data.items = [...data.items, data.input.trim()];
+            }
+          },
+          clearInput: {
+            handle: ({ data }) => { data.input = ""; },
+            // useRawElement gives the live DOM element so we can clear it
+            useRawElement: true
+          }
+        },
+        effects: {
+          // Property-level subscription: only fires when data.input changes
+          renderPreview: {
+            handle: ({ data, el }) => { el.textContent = data.input || "(empty)"; },
+            subscribe: ({ add, data }) => { add(data, "input"); }
+          },
+          // Property-level subscription: only fires when data.items changes
+          renderList: {
+            handle: ({ data, el }) => {
+              el.innerHTML = data.items
+                .map((item, i) => `<li>${i + 1}. ${item}</li>`)
+                .join("");
+            },
+            subscribe: ({ add, data }) => { add(data, "items"); }
+          }
+        }
+      }));
+
+      // --- DSL combinators demo ---
+      hctx.newCtx("dsl", () => ({
+        data: { log: [] },
+        actions: {
+          logA: ({ data }) => { data.log = [...data.log, "A"]; },
+          logB: ({ data }) => { data.log = [...data.log, "B"]; },
+          logC: ({ data }) => { data.log = [...data.log, "C"]; },
+          highlight: ({ data }) => { data.log = [...data.log, "highlight"]; },
+          unhighlight: ({ data }) => { data.log = [...data.log, "unhighlight"]; }
+        },
+        effects: {
+          // Object-level subscription: add(data) with no property watches all
+          renderLog: {
+            handle: ({ data, el }) => {
+              el.textContent = data.log.join(", ");
+            },
+            subscribe: ({ add, data }) => { add(data); }
+          }
+        }
+      }));
+
+      // --- Write trap demonstration ---
+      hctx.newCtx("writeTrap", () => ({
+        data: { count: 0 },
+        actions: {
+          test: ({ data }) => { data.count++; }
+        },
+        effects: {
+          // This effect tries to write — the trap will throw
+          trapped: {
+            handle: ({ data, el }) => {
+              el.textContent = "count=" + data.count;
+              try {
+                data.count = 999; // throws!
+              } catch (e) {
+                console.error("This won't execute")
+              }
+            }
+          },
+          // This effect can write because allowStateMutations is true
+          allowed: {
+            handle: ({ data, el }) => {
+              data.count += 10; // no error
+              el.textContent = "count=" + data.count;
+            },
+            allowStateMutations: true
+          },
+          showError: {
+            handle: ({ el }) => {
+              el.textContent = "Write trap fired (check console for error).";
+            }
+          }
+        }
+      }));
+
+      hctx.start();
+    });
+  </script>
+</body>
+</html>

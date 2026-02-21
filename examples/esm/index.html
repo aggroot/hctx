@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>hctx — ESM + TypeScript</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 600px; margin: 2rem auto; }
+    section { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; }
+    h2 { margin-top: 0; }
+    button { padding: 0.4rem 1rem; cursor: pointer; }
+    code { background: #f0f0f0; padding: 0.1rem 0.3rem; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <h1>hctx — ESM + TypeScript</h1>
+  <p>Contexts are auto-imported by name from <code>src/contexts/</code>.</p>
+
+  <!-- Counter context: auto-imported from src/contexts/counter.ctx.ts -->
+  <section>
+    <h2>Counter (typed)</h2>
+    <div hctx="counter">
+      <p>Count: <span hc-effect="render on hc:statechanged">0</span></p>
+      <button hc-action="increment on click">+1</button>
+      <button hc-action="decrement on click">-1</button>
+      <button hc-action="reset on click">Reset</button>
+    </div>
+  </section>
+
+  <!-- Dashboard context: auto-imported from src/contexts/dashboard.ctx.ts -->
+  <section>
+    <h2>Dashboard (stores + middleware)</h2>
+    <div hctx="dashboard">
+      <p>Theme: <span hc-effect="renderTheme on hc:statechanged"></span></p>
+      <p>Last action: <span hc-effect="renderLog on a:toggleTheme"></span></p>
+      <button hc-action="toggleTheme on click">Toggle Theme</button>
+    </div>
+  </section>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

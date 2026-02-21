@@ -1,0 +1,969 @@
+# hctx — LLM Usage Guide
+
+> A tiny language framework for embedding JavaScript in hypermedia.
+> ~4.8KB gzipped. Zero dependencies. Full TypeScript support.
+
+hctx adds client-side state management and DOM reactivity to server-rendered HTML.
+It is purpose-built for the hypermedia architecture — where the server owns the
+structure and the client manages behavior. It pairs naturally with HTMX.
+
+---
+
+## Mental Model
+
+Everything revolves around three concepts:
+
+- **Context**: A named state container with data, actions, and effects.
+- **Action**: Mutates state. Receives mutable `data`.
+- **Effect**: Reads state and updates the DOM. Receives read-only `data` by default.
+
+You wire them to the DOM with HTML attributes:
+
+```html
+<div hctx="counter">
+  <span hc-effect="render on hc:statechanged">0</span>
+  <button hc-action="increment on click">+1</button>
+</div>
+```
+
+`hctx="name"` marks a DOM subtree as belonging to a context.
+`hc-action="name on trigger"` binds an action to a trigger.
+`hc-effect="name on trigger"` binds an effect to a trigger.
+
+---
+
+## Public API
+
+### `newCtx(name: string, callback: () => HContext): void`
+
+Registers a context definition. The callback is a factory — called once per unique name.
+
+```js
+hctx.newCtx("counter", () => ({
+  data: { count: 0 },
+  actions: {
+    increment: {
+      handle: ({ data }) => { data.count++; }
+    }
+  },
+  effects: {
+    render: {
+      handle: ({ data, el }) => { el.textContent = data.count; },
+      subscribe: ({ add, data }) => { add(data, "count"); }
+    }
+  }
+}));
+```
+
+### `start(options?: Options): Promise<void>`
+
+Initializes the framework. Discovers all `[hctx]` elements, wires up actions/effects,
+starts the MutationObserver for dynamic elements.
+
+```ts
+type Options = {
+  actionAttr?: string;      // default: "hc-action"
+  effectAttr?: string;      // default: "hc-effect"
+  ctxAttr?: string;         // default: "hctx"
+  isDev?: boolean;          // default: false
+  getImportPath?: (ctxName: string) => string;
+  getImportCallback?: (ctxName: string) => ImportCallback;
+};
+```
+
+### `newStore(handle: () => T): Store<T>`
+
+Creates a global reactive store shared across contexts. No name parameter — just a factory.
+
+```js
+const themeStore = hctx.newStore(() => ({ mode: "light" }));
+```
+
+### `newMid(handle: MiddlewareCallback): MiddlewareCallback`
+
+Creates a middleware function (identity wrapper for type inference).
+
+```js
+const authGuard = hctx.newMid(({ el, details, type }) => {
+  if (!isAuthenticated()) return false; // blocks execution
+});
+```
+
+### `defineContext(callback): callback`
+
+Identity function for type inference in ESM modules.
+
+```ts
+import { defineContext } from "hctx";
+export default defineContext(() => ({
+  data: { count: 0 },
+  actions: { ... },
+  effects: { ... }
+}));
+```
+
+### `load(): void`
+
+Registers `hctx` on `window` and dispatches `hc:loaded`. Called automatically in
+the IIFE build and on ESM import.
+
+---
+
+## Setup Patterns
+
+### Browser (IIFE)
+
+```html
+<script src="hctx/iife.global.js" defer></script>
+<script>
+  document.addEventListener('hc:loaded', () => {
+    hctx.newCtx("counter", () => ({
+      data: { count: 0 },
+      actions: {
+        increment: { handle: ({ data }) => { data.count++; } }
+      },
+      effects: {
+        render: {
+          handle: ({ data, el }) => { el.textContent = data.count; },
+          subscribe: ({ add, data }) => { add(data, "count"); }
+        }
+      }
+    }));
+    hctx.start();
+  });
+</script>
+
+<div hctx="counter">
+  <h3 hc-effect="render on hc:statechanged">0</h3>
+  <button hc-action="increment on click">+1</button>
+</div>
+```
+
+### ESM (with auto-import)
+
+```ts
+// counter.ctx.ts
+import { defineContext } from "hctx";
+export default defineContext(() => ({
+  data: { count: 0 },
+  actions: {
+    increment: { handle: ({ data }) => { data.count++; } }
+  },
+  effects: {
+    render: {
+      handle: ({ data, el }) => { el.textContent = data.count; },
+      subscribe: ({ add, data }) => { add(data, "count"); }
+    }
+  }
+}));
+
+// main.ts
+import { start } from "hctx";
+start({
+  getImportCallback: (name) => () => import(`./contexts/${name}.ctx.ts`)
+});
+```
+
+---
+
+## Attribute DSL Grammar
+
+```
+attribute    = declaration { ";" declaration }
+declaration  = names " on " triggers
+names        = name { " and " name }
+triggers     = trigger { " or " trigger }
+name         = identifier [ ":" json_props ] [ "@" ctxName ]
+trigger      = event_name | "hc:loaded" | "hc:mutated" | "hc:statechanged"
+             | "a:" action_name [ ":" phase ] [ "@" ctxName ]
+```
+
+### Examples
+
+```html
+<!-- Single action on click -->
+<button hc-action="increment on click">
+
+<!-- Multiple actions on multiple triggers -->
+<div hc-action="save and validate on click or blur">
+
+<!-- Two independent declarations separated by semicolon -->
+<div hc-action="highlight on mouseenter; unhighlight on mouseleave">
+
+<!-- With JSON props -->
+<button hc-action="count:{&quot;step&quot;:5} on click">
+
+<!-- Local (fragment-scoped) action -->
+<button hc-action="$localSave on click">
+
+<!-- Effect on action completion -->
+<span hc-effect="render on a:increment">
+
+<!-- Effect on action phase -->
+<span hc-effect="showSpinner on a:save:before; hideSpinner on a:save:after">
+
+<!-- Effect on state change (requires subscribe) -->
+<span hc-effect="render on hc:statechanged">
+
+<!-- Effect on page load -->
+<div hc-effect="init on hc:loaded">
+
+<!-- Effect on dynamic insertion -->
+<div hc-effect="setup on hc:mutated">
+
+<!-- Cross-context trigger — @ only works on the trigger side -->
+<span hc-effect="showSuccess on a:submit@formCtx">
+<button hc-action="doB on a:doA@ctxA">
+```
+
+---
+
+## Trigger Types
+
+| Trigger | When it fires |
+|---|---|
+| `click`, `input`, etc. | Standard DOM event on the element |
+| `hc:loaded` | Once during `start()` for elements present at boot |
+| `hc:mutated` | Once when element is dynamically added after `start()` |
+| `hc:statechanged` | When a subscribed data property changes (requires `subscribe`) |
+| `a:actionName` | After the named action completes (default = `after` phase) |
+| `a:actionName:before` | Before the action handler runs |
+| `a:actionName:after` | After the action handler runs (explicit) |
+| `a:actionName@ctxName` | When action fires in another context |
+
+---
+
+## Action Handler Context
+
+```ts
+handle: (ctx, props?) => void | Promise<void>
+```
+
+| Property | Type | Description |
+|---|---|---|
+| `ctx.data` | `D` | Mutable state object |
+| `ctx.el` | `HTMLElement` | Triggering element (cloned by default) |
+| `ctx.execute` | `Function` | Re-trigger this action with delay/iterations |
+| `ctx.useStore` | `(store) => T` | Access a global store (mutable in actions) |
+| `ctx.onCleanup` | `(cb) => void` | Register cleanup callback for element removal |
+| `ctx.details` | `ContextDetails` | Trigger, phase, contextTag, isLocal |
+| `ctx.event` | `Event?` | Originating DOM event |
+| `props` | `object` | Parsed JSON from `:{"key":"val"}` in attribute |
+
+## Effect Handler Context
+
+Same as action, except:
+- `data` is **read-only** by default (write trap throws)
+- `el` is the **live** DOM element (not cloned)
+- No `execute` function
+- `useStore` returns write-trapped proxy by default
+
+---
+
+## Subscriptions (Reactivity)
+
+Effects with `hc:statechanged` trigger require a `subscribe` function that tells
+hctx which data to watch.
+
+### Property-level (fires only when specific property changes)
+
+```js
+effects: {
+  render: {
+    handle: ({ data, el }) => { el.textContent = data.count; },
+    subscribe: ({ add, data }) => { add(data, "count"); }
+  }
+}
+```
+
+### Object-level (fires when any property on the object changes)
+
+```js
+subscribe: ({ add, data }) => { add(data.counter); }
+```
+
+### Multi-property with trigger branching
+
+```js
+effects: {
+  update: {
+    handle: ({ data, el, details }) => {
+      if (details.trigger === "hc:statechanged:name") {
+        el.querySelector(".name").textContent = data.name;
+      }
+      if (details.trigger === "hc:statechanged:email") {
+        el.querySelector(".email").textContent = data.email;
+      }
+    },
+    subscribe: ({ add, data }) => {
+      add(data, "name");
+      add(data, "email");
+    }
+  }
+}
+```
+
+### Store subscription
+
+```js
+effects: {
+  applyTheme: {
+    handle: ({ el, useStore }) => {
+      const store = useStore(themeStore);
+      el.className = store.mode;
+    },
+    subscribe: ({ add, useStore }) => {
+      const store = useStore(themeStore);
+      add(store, "mode");
+    }
+  }
+}
+```
+
+Note: `hc:statechanged` subscriptions only fire on mutation, not on initial load.
+Use `hc:loaded` trigger for initial rendering.
+
+---
+
+## Fragments (Context at Multiple DOM Locations)
+
+Repeating `hctx="name"` at multiple places creates fragments — all sharing the
+same data, actions, and effects.
+
+```html
+<nav>
+  <div hctx="cart">
+    <span hc-effect="renderCount on hc:statechanged">0</span>
+  </div>
+</nav>
+
+<main>
+  <div hctx="cart">
+    <button hc-action="addItem on click">Add</button>
+  </div>
+</main>
+```
+
+Click "Add" in `<main>` → the count in `<nav>` updates. One context, shared state,
+multiple DOM locations.
+
+---
+
+## Tags (`#` — Independent Instances)
+
+Tags create separate instances of the same context definition, each with its own data.
+
+```html
+<div hctx="counter#first">
+  <span hc-effect="render on hc:statechanged">0</span>
+  <button hc-action="increment on click">+1</button>
+</div>
+
+<div hctx="counter#second">
+  <span hc-effect="render on hc:statechanged">0</span>
+  <button hc-action="increment on click">+1</button>
+</div>
+```
+
+Each counter is independent. `details.contextTag` gives access to the tag name
+("first", "second") inside handlers.
+
+**Fragments vs Tags:**
+- Fragments (`hctx="cart"` repeated) = shared data, same instance
+- Tags (`hctx="counter#a"`, `hctx="counter#b"`) = separate data, independent instances
+
+---
+
+## Local Actions (`$` Prefix)
+
+Prefix an action with `$` to scope it to its fragment only.
+
+```html
+<div hctx="panel">
+  <button hc-action="$toggle on click">Toggle</button>
+  <div hc-effect="show on a:toggle">Content A</div>
+</div>
+
+<div hctx="panel">
+  <button hc-action="$toggle on click">Toggle</button>
+  <div hc-effect="show on a:toggle">Content B</div>
+</div>
+```
+
+Each panel's `$toggle` only affects its own fragment. Note: effects subscribe to
+`a:toggle` (without `$`) — the `$` is only on the action definition.
+
+Note: `$` only scopes action subscriber dispatch. State subscriptions
+(`hc:statechanged`) are inherently global since all fragments share `data`.
+
+---
+
+## Cross-Context Composition (`@`)
+
+The `@` syntax allows subscribing to actions from other contexts. It works
+**only on the trigger side** (after `on`).
+
+### What works
+
+```html
+<!-- Effect in one context listens to action in another -->
+<div hctx="formCtx">
+  <button hc-action="submit on click">Submit</button>
+</div>
+<div hctx="notificationCtx">
+  <span hc-effect="showSuccess on a:submit@formCtx"></span>
+</div>
+
+<!-- Action chained to external action trigger -->
+<div hctx="ctxB">
+  <button hc-action="doB on a:doA@ctxA"></button>
+</div>
+```
+
+### What does NOT work
+
+```html
+<!-- WRONG: @ on action name side does NOT call another context's action -->
+<button hc-action="doSomething@ctxB on click">
+```
+
+Each context owns its own actions. `@` is only for listening, not delegation.
+
+---
+
+## Stores (Global Shared State)
+
+Stores are reactive state shared across contexts. Created with `newStore`.
+
+```js
+const themeStore = hctx.newStore(() => ({ mode: "light" }));
+
+hctx.newCtx("settings", () => ({
+  data: {},
+  actions: {
+    toggleTheme: {
+      handle: ({ useStore }) => {
+        const store = useStore(themeStore);
+        store.mode = store.mode === "light" ? "dark" : "light";
+      }
+    }
+  },
+  effects: {}
+}));
+
+hctx.newCtx("display", () => ({
+  data: {},
+  actions: {},
+  effects: {
+    applyTheme: {
+      handle: ({ el, useStore }) => {
+        const store = useStore(themeStore);
+        el.className = store.mode;
+      },
+      subscribe: ({ add, useStore }) => {
+        const store = useStore(themeStore);
+        add(store, "mode");
+      }
+    }
+  }
+}));
+```
+
+- In actions: `useStore` returns mutable store data.
+- In effects: `useStore` returns write-trapped (read-only) store data by default.
+- Store factory is called lazily on first access, then cached.
+
+---
+
+## Middleware
+
+Middleware intercepts action/effect execution. Return `false` to block.
+
+```js
+const logger = hctx.newMid(({ el, details, type }) => {
+  console.log(`${type}: ${details.trigger}`);
+});
+
+const authGuard = hctx.newMid(({ details, type }) => {
+  if (!isAuthenticated()) return false; // blocks execution
+});
+
+// Async middleware
+const asyncGuard = hctx.newMid(async ({ el }) => {
+  const allowed = await checkPermission();
+  if (!allowed) return false;
+});
+```
+
+### Applying middleware
+
+```js
+hctx.newCtx("app", () => ({
+  data: {},
+  options: { middleware: [logger] },       // all actions & effects
+  actions: {
+    options: { middleware: [authGuard] },   // all actions
+    save: {
+      handle: ({ data }) => { ... },
+      middleware: [validateForm],           // per-action
+    }
+  },
+  effects: {
+    options: { middleware: [logger] },      // all effects
+  }
+}));
+```
+
+---
+
+## Async Actions & Effects
+
+Actions and effects can be `async`. Concurrent execution on the same element is
+automatically prevented (second trigger silently skipped while first is running).
+
+```js
+actions: {
+  fetchData: {
+    handle: async ({ data }) => {
+      const res = await fetch("/api/data");
+      data.items = await res.json();
+    }
+  }
+}
+```
+
+### Action Phases (before/after)
+
+```html
+<div hc-effect="showSpinner on a:fetchData:before"></div>
+<div hc-effect="hideSpinner on a:fetchData:after"></div>
+```
+
+- `before` fires after middleware passes, before the handler runs.
+- `after` fires after the handler completes (default if no phase specified).
+- Effects with no explicit phase (`a:save`) default to `after`.
+
+---
+
+## Action Re-execution (`execute`)
+
+Actions can re-trigger themselves with delay and iteration control.
+
+```js
+actions: {
+  poll: {
+    handle: async ({ data, execute }) => {
+      const res = await fetch("/api/status");
+      data.status = await res.json();
+
+      // Re-execute after 5000ms, up to 10 times
+      execute("polling", 5000, (counter) => {
+        console.log(`Poll #${counter}`);
+      }, 10);
+    }
+  }
+}
+```
+
+Signature: `execute(reason?, delay?, callback?, times?)`
+- `reason` (string) — becomes `details.trigger` for re-execution
+- `delay` (number) — ms to wait (default: 200)
+- `callback` (function) — called each iteration with counter
+- `times` (number) — max re-executions (undefined = unlimited)
+
+IMPORTANT: Do NOT `await` execute — it must be fire-and-forget. Awaiting it blocks
+the handler and prevents re-execution (the concurrent guard keeps the element locked).
+
+---
+
+## Props (`:JSON`)
+
+Pass static data to handlers via JSON in the attribute.
+
+```html
+<button hc-action="count:{&quot;step&quot;:5} on click">+5</button>
+```
+
+```js
+actions: {
+  count: {
+    handle: ({ data }, props) => {
+      data.count += props.step ?? 1;
+    }
+  }
+}
+```
+
+The JSON is parsed and passed as the second argument. Multiple elements can use the
+same action name with different props — each gets its own cached instance.
+
+---
+
+## Write Traps
+
+Effects receive a read-only proxy of `data`. Writing throws an error.
+
+```
+"data writes not allowed within effects by default.
+ use allowStateMutations option to activate it."
+```
+
+To allow mutations in effects:
+
+```js
+// Per-effect
+effects: {
+  myEffect: {
+    handle: ({ data }) => { data.count++; },
+    allowStateMutations: true,
+  }
+}
+
+// All effects in context
+effects: {
+  options: { allowStateMutations: true },
+  myEffect: ({ data }) => { data.count++; },
+}
+```
+
+The same write trap applies to stores via `useStore` inside effects.
+
+---
+
+## Element Cloning
+
+By default, action handlers receive a deep clone of the triggering element
+(`el.cloneNode(true)`). This prevents accidental DOM mutation from actions.
+
+To get the live element:
+
+```js
+actions: {
+  myAction: {
+    handle: ({ el }) => { el.classList.add("active"); },
+    useRawElement: true,
+  }
+}
+```
+
+Effects always receive the live DOM element (no cloning).
+
+---
+
+## Cleanup (`onCleanup`)
+
+Register teardown callbacks that run when the element is removed from the DOM.
+
+```js
+actions: {
+  startTimer: {
+    handle: ({ data, onCleanup }) => {
+      const id = setInterval(() => data.tick++, 1000);
+      onCleanup(async () => clearInterval(id));
+    }
+  }
+}
+```
+
+Cleanups fire automatically via the MutationObserver when elements are removed.
+hctx also uses `onCleanup` internally for event listeners and subscriptions.
+
+---
+
+## Nested Contexts
+
+Context elements can nest. Each is fully independent.
+
+```html
+<div hctx="outer">
+  <h2 hc-effect="renderOuter on hc:statechanged"></h2>
+  <div hctx="inner">
+    <h3 hc-effect="renderInner on hc:statechanged"></h3>
+    <button hc-action="doInner on click">Inner</button>
+  </div>
+  <button hc-action="doOuter on click">Outer</button>
+</div>
+```
+
+Inner elements belong exclusively to their innermost context.
+
+---
+
+## Dynamic Elements (MutationObserver)
+
+After `start()`, hctx watches for DOM changes. New `[hctx]`, `[hc-action]`, and
+`[hc-effect]` elements are automatically discovered and wired up.
+
+Use `hc:mutated` (not `hc:loaded`) for dynamically inserted elements:
+
+```html
+<!-- Injected by HTMX swap -->
+<div hc-effect="init on hc:mutated"></div>
+```
+
+- `hc:loaded` fires only during `start()`.
+- `hc:mutated` fires only for elements added after `start()`.
+
+---
+
+## Action/Effect Definition Forms
+
+### Simple form (shorthand — function only)
+
+```js
+actions: {
+  increment: ({ data }) => { data.count++; }
+}
+effects: {
+  render: ({ data, el }) => { el.textContent = data.count; }
+}
+```
+
+### Object form (with options)
+
+```js
+actions: {
+  increment: {
+    handle: ({ data, el, execute, useStore, onCleanup, details, event }, props) => {
+      data.count++;
+    },
+    subscribe: ({ add, data, useStore }) => { ... },
+    middleware: [myMiddleware],
+    useRawElement: true,
+  }
+}
+effects: {
+  render: {
+    handle: ({ data, el, useStore, onCleanup, details, event }, props) => {
+      el.textContent = data.count;
+    },
+    subscribe: ({ add, data, useStore }) => { add(data, "count"); },
+    middleware: [myMiddleware],
+    allowStateMutations: true,
+  }
+}
+```
+
+---
+
+## Common Patterns
+
+### Counter
+
+```js
+hctx.newCtx("counter", () => ({
+  data: { count: 0 },
+  actions: {
+    increment: { handle: ({ data }) => { data.count++; } },
+    decrement: { handle: ({ data }) => { data.count--; } }
+  },
+  effects: {
+    render: {
+      handle: ({ data, el }) => { el.textContent = data.count; },
+      subscribe: ({ add, data }) => { add(data, "count"); }
+    }
+  }
+}));
+```
+
+```html
+<div hctx="counter">
+  <span hc-effect="render on hc:statechanged">0</span>
+  <button hc-action="increment on click">+</button>
+  <button hc-action="decrement on click">-</button>
+</div>
+```
+
+### Toggle panel
+
+```js
+hctx.newCtx("panel", () => ({
+  data: { open: false },
+  actions: {
+    toggle: { handle: ({ data }) => { data.open = !data.open; } }
+  },
+  effects: {
+    show: {
+      handle: ({ data, el }) => {
+        el.style.display = data.open ? "block" : "none";
+      },
+      subscribe: ({ add, data }) => { add(data, "open"); }
+    }
+  }
+}));
+```
+
+```html
+<div hctx="panel">
+  <button hc-action="toggle on click">Toggle</button>
+  <div hc-effect="show on hc:statechanged" style="display:none">
+    Panel content here
+  </div>
+</div>
+```
+
+### Form with loading state
+
+```js
+hctx.newCtx("form", () => ({
+  data: { loading: false, result: null },
+  actions: {
+    submit: {
+      handle: async ({ data, el }) => {
+        data.loading = true;
+        const res = await fetch("/api/submit", {
+          method: "POST",
+          body: new FormData(el.closest("form"))
+        });
+        data.result = await res.json();
+        data.loading = false;
+      },
+      useRawElement: true
+    }
+  },
+  effects: {
+    spinner: {
+      handle: ({ data, el }) => {
+        el.style.display = data.loading ? "inline" : "none";
+      },
+      subscribe: ({ add, data }) => { add(data, "loading"); }
+    },
+    showResult: {
+      handle: ({ data, el }) => {
+        if (data.result) el.textContent = JSON.stringify(data.result);
+      },
+      subscribe: ({ add, data }) => { add(data, "result"); }
+    }
+  }
+}));
+```
+
+```html
+<div hctx="form">
+  <form>
+    <input name="email" type="email" />
+    <button hc-action="submit on click">
+      Submit
+      <span hc-effect="spinner on hc:statechanged" style="display:none">...</span>
+    </button>
+  </form>
+  <div hc-effect="showResult on hc:statechanged"></div>
+</div>
+```
+
+### Tabs with local scoping
+
+```js
+hctx.newCtx("tabs", () => ({
+  data: { activeTab: "tab1" },
+  actions: {
+    selectTab: {
+      handle: ({ data }, props) => { data.activeTab = props.id; }
+    }
+  },
+  effects: {
+    highlightTab: {
+      handle: ({ data, el }, props) => {
+        el.classList.toggle("active", data.activeTab === props.id);
+      },
+      subscribe: ({ add, data }) => { add(data, "activeTab"); }
+    },
+    showPanel: {
+      handle: ({ data, el }, props) => {
+        el.style.display = data.activeTab === props.id ? "block" : "none";
+      },
+      subscribe: ({ add, data }) => { add(data, "activeTab"); }
+    }
+  }
+}));
+```
+
+```html
+<div hctx="tabs">
+  <nav>
+    <button hc-action="selectTab:{&quot;id&quot;:&quot;tab1&quot;} on click"
+            hc-effect="highlightTab:{&quot;id&quot;:&quot;tab1&quot;} on hc:statechanged">Tab 1</button>
+    <button hc-action="selectTab:{&quot;id&quot;:&quot;tab2&quot;} on click"
+            hc-effect="highlightTab:{&quot;id&quot;:&quot;tab2&quot;} on hc:statechanged">Tab 2</button>
+  </nav>
+  <div hc-effect="showPanel:{&quot;id&quot;:&quot;tab1&quot;} on hc:statechanged">Content 1</div>
+  <div hc-effect="showPanel:{&quot;id&quot;:&quot;tab2&quot;} on hc:statechanged" style="display:none">Content 2</div>
+</div>
+```
+
+### Cross-context notification
+
+```js
+hctx.newCtx("cart", () => ({
+  data: { items: [] },
+  actions: {
+    addItem: {
+      handle: ({ data }, props) => { data.items.push(props.name); }
+    }
+  },
+  effects: {}
+}));
+
+hctx.newCtx("toast", () => ({
+  data: {},
+  actions: {},
+  effects: {
+    notify: {
+      handle: ({ el }) => {
+        el.textContent = "Item added!";
+        el.style.display = "block";
+        setTimeout(() => { el.style.display = "none"; }, 2000);
+      }
+    }
+  }
+}));
+```
+
+```html
+<div hctx="cart">
+  <button hc-action="addItem:{&quot;name&quot;:&quot;Widget&quot;} on click">Add Widget</button>
+</div>
+<div hctx="toast">
+  <div hc-effect="notify on a:addItem@cart" style="display:none"></div>
+</div>
+```
+
+---
+
+## Key Rules and Gotchas
+
+1. **`@` only works on the trigger side.** You cannot call another context's action
+   with `hc-action="doSomething@ctxB on click"`. Use `@` only after `on`:
+   `hc-effect="react on a:doSomething@ctxB"`.
+
+2. **`$` prefix is only on the action definition.** Effects subscribe to the action
+   name without `$`: `hc-action="$toggle on click"` pairs with
+   `hc-effect="show on a:toggle"`.
+
+3. **`hc:statechanged` subscriptions only fire on mutation**, not on initial load.
+   For initial rendering, combine with `hc:loaded`:
+   `hc-effect="render on hc:loaded; render on hc:statechanged"` or use a separate
+   init effect.
+
+4. **`hc:statechanged:propertyName` is runtime-only.** You can read it from
+   `details.trigger` inside handlers, but you cannot use it as an HTML attribute
+   trigger. The attribute must be `hc:statechanged` (without suffix).
+
+5. **Do NOT `await execute()`.** Fire-and-forget only. Awaiting blocks the handler
+   and prevents re-execution due to the concurrent guard.
+
+6. **Effects receive read-only data by default.** Use `allowStateMutations: true`
+   to opt out. Actions always get mutable data.
+
+7. **Action handlers receive a cloned element by default.** Use `useRawElement: true`
+   if you need to modify the actual DOM element.
+
+8. **`newStore` takes only a factory function.** No name parameter:
+   `newStore(() => ({ ... }))`, not `newStore("name", () => ({ ... }))`.
+
+9. **Fragments share data. Tags don't.** `hctx="cart"` repeated = same state.
+   `hctx="cart#a"` and `hctx="cart#b"` = separate state.
+
+10. **Throwing in effects kills the subscriber loop.** If an effect throws (e.g.,
+    from a write trap), other effects subscribed to the same action won't run.
+    Keep throwing effects on separate action triggers.

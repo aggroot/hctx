@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "module": "es2022",
+    "target": "es2022",
+    "moduleResolution":"Node",
+    "lib": ["es2022", "DOM"],
+    "baseUrl": "./src",
+    "rootDirs": ["./src"],
+    "strict": true,
+    "esModuleInterop": true,
+    "noImplicitAny": true,
+    "skipLibCheck": true,
+  },
+  "include": ["./src", "./tests", "./builds"],
+}

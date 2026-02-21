@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>hctx — 03 Composition</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 700px; margin: 2rem auto; }
+    section { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; }
+    h2 { margin-top: 0; }
+    button { padding: 0.4rem 1rem; cursor: pointer; }
+    code { background: #f0f0f0; padding: 0.1rem 0.3rem; border-radius: 3px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
+    .box { border: 1px solid #ccc; padding: 0.8rem; border-radius: 4px; }
+    .spinner { color: orange; }
+    .done { color: green; }
+  </style>
+</head>
+<body>
+  <h1>03 — Composition</h1>
+  <p>Fragments, tags, local actions, cross-context, nested contexts, action phases.</p>
+
+  <!-- ============================================================
+       Section 1: Fragments — same context at multiple DOM locations
+       All three fragments share the same data. Clicking "Add" in
+       any fragment updates all of them.
+       ============================================================ -->
+  <section>
+    <h2>Fragments (shared state)</h2>
+    <p>Three <code>hctx="cart"</code> fragments — one context, multiple DOM locations.</p>
+
+    <div class="grid">
+      <!-- Fragment 1: Header -->
+      <div class="box" hctx="cart">
+        <strong>Header</strong><br>
+        Items: <span hc-effect="renderCount on a:addItem">0</span>
+      </div>
+
+      <!-- Fragment 2: Main (has the add button) -->
+      <div class="box" hctx="cart">
+        <strong>Main</strong><br>
+        Items: <span hc-effect="renderCount on a:addItem">0</span><br>
+        <button hc-action="addItem on click">Add Item</button>
+      </div>
+
+      <!-- Fragment 3: Sidebar -->
+      <div class="box" hctx="cart">
+        <strong>Sidebar</strong><br>
+        List: <span hc-effect="renderList on a:addItem">[]</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       Section 2: Tags — independent instances of the same definition
+       counter#a and counter#b have separate data.
+       ============================================================ -->
+  <section>
+    <h2>Tags (independent instances)</h2>
+    <p><code>hctx="counter#a"</code> and <code>hctx="counter#b"</code> — same definition, separate data.</p>
+
+    <div class="grid" style="grid-template-columns: 1fr 1fr;">
+      <div class="box" hctx="counter#a">
+        <strong>Counter A</strong><br>
+        Count: <span hc-effect="render on a:increment">0</span>
+        <button hc-action="increment on click">+1</button>
+      </div>
+
+      <div class="box" hctx="counter#b">
+        <strong>Counter B</strong><br>
+        Count: <span hc-effect="render on a:increment">0</span>
+        <button hc-action="increment on click">+1</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       Section 3: Local actions ($prefix) — scoped per fragment
+       $toggle in Fragment 1 does NOT trigger effects in Fragment 2.
+       ============================================================ -->
+  <section>
+    <h2>Local actions (<code>$</code> prefix)</h2>
+    <p><code>$toggle</code> is scoped per fragment — clicking one doesn't affect the other.</p>
+
+    <div class="grid" style="grid-template-columns: 1fr 1fr;">
+      <div class="box" hctx="panel">
+        <strong>Panel 1</strong><br>
+        <span hc-effect="show on a:toggle">hidden</span>
+        <button hc-action="$toggle on click">Toggle</button>
+      </div>
+
+      <div class="box" hctx="panel">
+        <strong>Panel 2</strong><br>
+        <span hc-effect="show on a:toggle">hidden</span>
+        <button hc-action="$toggle on click">Toggle</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       Section 4: Cross-context communication (@ syntax)
+       notifCtx listens to formCtx's "submit" action via @.
+       ============================================================ -->
+  <section>
+    <h2>Cross-context (<code>@</code> syntax)</h2>
+    <p><code>a:submit@formCtx</code> — notifCtx reacts when formCtx's submit action fires.</p>
+
+    <div class="grid" style="grid-template-columns: 1fr 1fr;">
+      <div class="box" hctx="formCtx">
+        <strong>Form Context</strong><br>
+        <span hc-effect="renderForm on a:submit"></span>
+        <button hc-action="submit on click">Submit</button>
+      </div>
+
+      <div class="box" hctx="notifCtx">
+        <strong>Notification Context</strong><br>
+        <!-- @ on trigger side: listens to formCtx's submit action -->
+        <span hc-effect="notify on a:submit@formCtx">waiting...</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       Section 5: Nested contexts — inner/outer isolation
+       inner's actions don't affect outer, and vice versa.
+       ============================================================ -->
+  <section>
+    <h2>Nested contexts</h2>
+    <p>Inner context is fully isolated from outer — same action name, different data.</p>
+
+    <div class="box" hctx="outer">
+      <strong>Outer:</strong> <span hc-effect="render on a:inc"></span>
+      <button hc-action="inc on click">Outer +1</button>
+
+      <div class="box" style="margin-top: 0.5rem;" hctx="inner">
+        <strong>Inner:</strong> <span hc-effect="render on a:inc"></span>
+        <button hc-action="inc on click">Inner +1</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       Section 6: Action phases (before/after)
+       Shows a spinner during an async action.
+       ============================================================ -->
+  <section>
+    <h2>Action phases</h2>
+    <p><code>a:save:before</code> shows spinner, <code>a:save:after</code> shows done.</p>
+
+    <div hctx="phaseDemo">
+      <!-- ";" combinator: showSpinner on before, hideSpinner on after — same element -->
+      <span hc-effect="showSpinner on a:save:before; hideSpinner on a:save:after" class="spinner"></span>
+      <span hc-effect="showDone on a:save:after"></span>
+      <button hc-action="save on click">Save (async)</button>
+    </div>
+  </section>
+
+  <script src="../dist/iife.global.js" defer></script>
+  <script>
+    document.addEventListener("hc:loaded", () => {
+
+      // --- Fragments: cart ---
+      hctx.newCtx("cart", () => ({
+        data: { count: 0, items: [] },
+        actions: {
+          addItem: ({ data }) => {
+            data.count++;
+            data.items.push("Item " + data.count);
+          }
+        },
+        effects: {
+          renderCount: ({ data, el }) => { el.textContent = data.count; },
+          renderList: ({ data, el }) => { el.textContent = JSON.stringify(data.items); }
+        }
+      }));
+
+      // --- Tags: counter ---
+      hctx.newCtx("counter", () => ({
+        data: { count: 0 },
+        actions: {
+          increment: ({ data }) => { data.count++; }
+        },
+        effects: {
+          // details.contextTag tells you which tag instance fired
+          render: ({ data, el, details }) => {
+            el.textContent = data.count + " (tag: " + details.contextTag + ")";
+          }
+        }
+      }));
+
+      // --- Local actions: panel ---
+      hctx.newCtx("panel", () => ({
+        data: { visible: false },
+        actions: {
+          toggle: ({ data }) => { data.visible = !data.visible; }
+        },
+        effects: {
+          show: ({ data, el }) => {
+            el.textContent = data.visible ? "visible" : "hidden";
+          }
+        }
+      }));
+
+      // --- Cross-context: formCtx + notifCtx ---
+      hctx.newCtx("formCtx", () => ({
+        data: { submitted: false },
+        actions: {
+          submit: ({ data }) => { data.submitted = true; }
+        },
+        effects: {
+          renderForm: ({ data, el }) => {
+            el.textContent = data.submitted ? "Submitted!" : "";
+          }
+        }
+      }));
+
+      hctx.newCtx("notifCtx", () => ({
+        data: {},
+        actions: {},
+        effects: {
+          notify: ({ el }) => { el.textContent = "Notified via @formCtx!"; }
+        }
+      }));
+
+      // --- Nested contexts: outer + inner ---
+      hctx.newCtx("outer", () => ({
+        data: { count: 0 },
+        actions: {
+          inc: ({ data }) => { data.count++; }
+        },
+        effects: {
+          render: ({ data, el }) => { el.textContent = "outer=" + data.count; }
+        }
+      }));
+
+      hctx.newCtx("inner", () => ({
+        data: { count: 0 },
+        actions: {
+          inc: ({ data }) => { data.count++; }
+        },
+        effects: {
+          render: ({ data, el }) => { el.textContent = "inner=" + data.count; }
+        }
+      }));
+
+      // --- Action phases: phaseDemo ---
+      hctx.newCtx("phaseDemo", () => ({
+        data: { saving: false },
+        actions: {
+          // Async action: before fires immediately, after fires when done
+          save: {
+            handle: async ({ data }) => {
+              await new Promise(r => setTimeout(r, 1000));
+              data.saving = false;
+            }
+          }
+        },
+        effects: {
+          showSpinner: ({ el }) => { el.textContent = "Saving..."; },
+          hideSpinner: ({ el }) => { el.textContent = ""; },
+          showDone: ({ el }) => { el.textContent = "Done!"; }
+        }
+      }));
+
+      hctx.start();
+    });
+  </script>
+</body>
+</html>

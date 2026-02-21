@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>hctx — 01 Counter</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 600px; margin: 2rem auto; }
+    section { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; }
+    h2 { margin-top: 0; }
+    button { padding: 0.4rem 1rem; cursor: pointer; }
+    code { background: #f0f0f0; padding: 0.1rem 0.3rem; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <h1>01 — Counter</h1>
+  <p>Core basics: contexts, actions, effects, subscriptions, lifecycle.</p>
+
+  <!-- ============================================================
+       Section 1: Basic action → effect (action subscriber trigger)
+       An action mutates state, an effect reacts via "a:actionName".
+       ============================================================ -->
+  <section>
+    <h2>Action subscriber</h2>
+    <p>Effect triggers on <code>a:increment</code> (fires after the action runs).</p>
+
+    <div hctx="counter">
+      <!-- Effect: re-renders when the "increment" action fires -->
+      <h3 hc-effect="render on a:increment">0</h3>
+
+      <!-- Action: mutates data.count on click -->
+      <button hc-action="increment on click">+1</button>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       Section 2: State subscription (hc:statechanged)
+       subscribe() + add() track specific properties. The effect
+       re-runs automatically when the subscribed property changes.
+       ============================================================ -->
+  <section>
+    <h2>State subscription</h2>
+    <p>Effect triggers on <code>hc:statechanged</code> — reacts to property changes, not action names.</p>
+
+    <div hctx="reactiveCounter">
+      <!-- Subscribes to data.count — updates whenever count changes -->
+      <h3 hc-effect="render on hc:statechanged">0</h3>
+
+      <button hc-action="increment on click">+1</button>
+      <button hc-action="decrement on click">-1</button>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       Section 3: Lifecycle trigger (hc:loaded)
+       Fires once during start() for elements present at boot.
+       ============================================================ -->
+  <section>
+    <h2>Lifecycle: <code>hc:loaded</code></h2>
+    <p>The effect runs once when the page loads — no user interaction needed.</p>
+
+    <div hctx="greeter">
+      <!-- Fires on page load via hc:loaded -->
+      <h3 hc-effect="greet on hc:loaded">Loading...</h3>
+    </div>
+  </section>
+
+  <!-- Load hctx IIFE build (registers window.hctx, dispatches hc:loaded) -->
+  <script src="../dist/iife.global.js" defer></script>
+  <script>
+    document.addEventListener("hc:loaded", () => {
+
+      // --- Counter: basic action → effect ---
+      hctx.newCtx("counter", () => ({
+        data: { count: 0 },
+        actions: {
+          // Simple-form action: receives { data } and mutates state
+          increment: ({ data }) => { data.count++; }
+        },
+        effects: {
+          // Simple-form effect: receives { data, el } and updates the DOM
+          render: ({ data, el }) => { el.textContent = data.count; }
+        }
+      }));
+
+      // --- Reactive Counter: state subscription ---
+      hctx.newCtx("reactiveCounter", () => ({
+        data: { count: 0 },
+        actions: {
+          increment: ({ data }) => { data.count++; },
+          decrement: ({ data }) => { data.count--; }
+        },
+        effects: {
+          render: {
+            // Object-form effect: handle + subscribe
+            handle: ({ data, el }) => { el.textContent = data.count; },
+            // subscribe tells hctx which properties to watch
+            subscribe: ({ add, data }) => {
+              add(data, "count"); // fires when data.count changes
+            }
+          }
+        }
+      }));
+
+      // --- Greeter: lifecycle trigger ---
+      hctx.newCtx("greeter", () => ({
+        data: { message: "Hello from hctx!" },
+        actions: {},
+        effects: {
+          greet: ({ data, el }) => { el.textContent = data.message; }
+        }
+      }));
+
+      hctx.start();
+    });
+  </script>
+</body>
+</html>

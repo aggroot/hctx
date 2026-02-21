@@ -1,0 +1,59 @@
+{
+  "name": "hctx",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "a tiny language framework for embedding javascript in hypermedia",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aggroot/hctx.git"
+  },
+  "author": "AGG",
+  "license": "MIT",
+  "keywords": [
+    "hypermedia",
+    "htmx",
+    "dom-reactivity",
+    "state-management",
+    "framework",
+    "tiny",
+    "zero-dependencies"
+  ],
+  "homepage": "https://github.com/aggroot/hctx#readme",
+  "main": "dist/esm.js",
+  "unpkg": "dist/iife.global.js",
+  "jsdelivr": "dist/iife.global.js",
+  "types": "dist/esm.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/esm.d.ts",
+      "import": "./dist/esm.js"
+    }
+  },
+  "files": [
+    "dist",
+    "docs",
+    "README.md",
+    "LICENSE.txt",
+    "AUTHORS.txt"
+  ],
+  "scripts": {
+    "build": "rimraf ./dist && concurrently -n tsc,pnpm \"tsc --noEmit\" \"pnpm run --filter . --parallel /^build:/ \"",
+    "dev": "rimraf ./dist && concurrently -n tsc,pnpm  \"tsc --noEmit -w --preserveWatchOutput\" \"pnpm run --filter . --parallel /^build:/ --watch --sourcemap \"",
+    "clean": "concurrently \"rimraf ./node_modules\" \"rimraf ./dist\" && pnpm install",
+    "build:[esm+dts]": "tsup builds/esm.ts --format esm --dts",
+    "build:[iife]": "tsup builds/iife.ts --format iife ",
+    "test:pw": "playwright test"
+  },
+  "devDependencies": {
+    "@microsoft/api-extractor": "^7.52.10",
+    "@playwright/test": "^1.54.2",
+    "@types/glob": "^8.1.0",
+    "@types/node": "^20.19.11",
+    "brotli": "^1.3.3",
+    "concurrently": "^8.2.2",
+    "glob": "^10.4.5",
+    "rimraf": "^5.0.10",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.2"
+  }
+}

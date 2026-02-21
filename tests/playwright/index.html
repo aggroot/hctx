@@ -1,0 +1,52 @@
+<html>
+<div id="root">
+  <!-- This is where our test subjects will be injected. -->
+</div>
+
+<script>
+  let root = document.querySelector("#root");
+  root.evalScripts = (jsDto, startOptions) => {
+    // Load bespoke JavaScript.
+    const { onLoaded, beforeLoaded, onStarted } = jsDto
+    if (onLoaded) {
+      let script = document.createElement("script");
+      script.textContent = `
+                    document.addEventListener('hc:loaded', () => {
+                        ${onLoaded}
+                        hctx.start(${JSON.stringify(startOptions)});
+                    })
+                `;
+      root.after(script);
+      
+    }    
+
+    if (onStarted) {
+      let script = document.createElement("script");
+      script.textContent = `
+                    document.addEventListener('hc:started', () => {
+                        ${onStarted}
+                    })
+                `;
+      root.after(script);
+    }
+
+    if (beforeLoaded) {
+      let script = document.createElement("script");
+      script.src = `${beforeLoaded}`;
+      root.after(script);
+    }
+
+    // Load all injected script tags.
+    root.querySelectorAll("script").forEach((el) => {
+      eval(el.innerHTML);
+    });
+
+    // Load HCTX.
+    let script = document.createElement("script");
+    script.src = "../../dist/iife.global.js";
+    root.after(script);
+
+  };
+</script>
+
+</html>

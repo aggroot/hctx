@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>hctx — 04 Advanced</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 700px; margin: 2rem auto; }
+    section { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; }
+    h2 { margin-top: 0; }
+    button { padding: 0.4rem 1rem; cursor: pointer; }
+    code { background: #f0f0f0; padding: 0.1rem 0.3rem; border-radius: 3px; }
+    .spinner { color: orange; }
+    .box { border: 1px solid #ccc; padding: 0.8rem; border-radius: 4px; margin-top: 0.5rem; }
+    #dynamic-container { min-height: 2rem; }
+  </style>
+</head>
+<body>
+  <h1>04 — Advanced</h1>
+  <p>Async, middleware, stores, execute, cleanup, props, useRawElement, hc:mutated.</p>
+
+  <!-- ============================================================
+       Section 1: Async action with concurrent prevention + phases
+       Rapid clicks are ignored while the action is running.
+       ============================================================ -->
+  <section>
+    <h2>Async action + concurrent prevention</h2>
+    <p>Click rapidly — only the first click executes. Before/after phases show a spinner.</p>
+
+    <div hctx="asyncDemo">
+      <span hc-effect="showSpinner on a:fetchData:before" class="spinner"></span>
+      <span hc-effect="showResult on a:fetchData"></span>
+      <span hc-effect="renderCount on a:fetchData"></span>
+      <button hc-action="fetchData on click">Fetch</button>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       Section 2: Middleware — sync guard, async guard, context-level
+       Middleware can block (return false) or inspect context.
+       ============================================================ -->
+  <section>
+    <h2>Middleware</h2>
+    <p>Sync guard blocks the guarded action. Async guard delays then blocks. Context-level middleware logs everything.</p>
+
+    <div hctx="midDemo">
+      <p>Count: <span hc-effect="renderCount on a:open">0</span></p>
+      <p>Log: <span id="mid-log"></span></p>
+
+      <!-- Per-action middleware: sync guard returns false -->
+      <button hc-action="guarded on click">Guarded (blocked)</button>
+
+      <!-- Per-action middleware: async guard returns false after delay -->
+      <button hc-action="asyncGuarded on click">Async Guarded (blocked)</button>
+
+      <!-- No per-action middleware — context-level still logs -->
+      <button hc-action="open on click">Open (allowed)</button>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       Section 3: Stores — global shared state across contexts
+       A store is created outside contexts and accessed via useStore.
+       ============================================================ -->
+  <section>
+    <h2>Stores</h2>
+    <p>Theme store shared between writer and reader contexts. Store subscriptions react to changes.</p>
+
+    <div class="box" hctx="storeWriter">
+      <strong>Writer</strong>
+      <button hc-action="setDark on click">Set Dark</button>
+      <button hc-action="setLight on click">Set Light</button>
+    </div>
+
+    <div class="box" hctx="storeReader">
+      <strong>Reader</strong> — Theme: <span hc-effect="applyTheme on hc:statechanged">light</span>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       Section 4: Props — pass JSON data via the attribute
+       Props are encoded with &quot; in HTML attributes.
+       ============================================================ -->
+  <section>
+    <h2>Props</h2>
+    <p>The step value is passed as a JSON prop: <code>count:{&quot;step&quot;:5}</code>.</p>
+
+    <div hctx="propsDemo">
+      <p>Total: <span hc-effect="renderTotal on a:count">0</span></p>
+      <button hc-action="count:{&quot;step&quot;:5} on click">+5</button>
+      <button hc-action="count:{&quot;step&quot;:10} on click">+10</button>
+      <button hc-action="count on click">+1 (default)</button>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       Section 5: Execute — re-trigger an action with delay
+       Polling pattern: re-execute 3 times with 500ms delay.
+       ============================================================ -->
+  <section>
+    <h2>Execute (re-execution)</h2>
+    <p>Polls 3 times with 500ms delay. Counter shows progress.</p>
+
+    <div hctx="executeDemo">
+      <p>Poll count: <span hc-effect="renderPoll on a:poll">0</span></p>
+      <p>Iterations: <span id="exec-iterations"></span></p>
+      <button hc-action="poll on click">Start Polling</button>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       Section 6: onCleanup — timer cleared on element removal
+       ============================================================ -->
+  <section>
+    <h2>onCleanup</h2>
+    <p>A timer ticks every 500ms. Removing the element stops the timer via cleanup.</p>
+
+    <div hctx="cleanupDemo">
+      <p hc-effect="startTimer on hc:loaded">Ticks: 0</p>
+      <button hc-action="removeTimer on click">Remove Timer Element</button>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       Section 7: useRawElement — live DOM access in action
+       Default actions get a cloned element. useRawElement gets live.
+       ============================================================ -->
+  <section>
+    <h2>useRawElement</h2>
+    <p>The raw action modifies the live DOM. The clone action's mutation doesn't reach the DOM.</p>
+
+    <div hctx="rawDemo">
+      <button hc-action="mutateClone on click">Mutate Clone (no effect)</button>
+      <button hc-action="mutateRaw on click">Mutate Raw (adds border)</button>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       Section 8: hc:mutated — dynamically injected elements
+       New elements auto-wire via MutationObserver.
+       ============================================================ -->
+  <section>
+    <h2>hc:mutated</h2>
+    <p>Click to inject a new element. It auto-wires and runs its <code>hc:mutated</code> effect.</p>
+
+    <div hctx="dynamicDemo">
+      <p>Static (loaded): <span hc-effect="render on hc:loaded"></span></p>
+      <div id="dynamic-container"></div>
+      <button hc-action="addElement on click">Add Dynamic Element</button>
+    </div>
+  </section>
+
+  <script src="../dist/iife.global.js" defer></script>
+  <script>
+    document.addEventListener("hc:loaded", () => {
+
+      // --- Async action with concurrent prevention ---
+      hctx.newCtx("asyncDemo", () => ({
+        data: { count: 0, result: "" },
+        actions: {
+          fetchData: {
+            handle: async ({ data }) => {
+              await new Promise(r => setTimeout(r, 800));
+              data.count++;
+              data.result = "Loaded!";
+            }
+          }
+        },
+        effects: {
+          showSpinner: ({ el }) => { el.textContent = "Loading..."; },
+          showResult: ({ data, el }) => {
+            el.textContent = data.result;
+          },
+          renderCount: ({ data, el }) => {
+            el.textContent = " (fetches: " + data.count + ")";
+          }
+        }
+      }));
+
+      // --- Middleware demo ---
+      const midLog = [];
+      const contextLogger = hctx.newMid(({ type, details }) => {
+        midLog.push(type + ":" + details.trigger);
+        document.getElementById("mid-log").textContent = midLog.join(", ");
+      });
+
+      const syncGuard = hctx.newMid(() => {
+        midLog.push("BLOCKED:sync");
+        document.getElementById("mid-log").textContent = midLog.join(", ");
+        return false;
+      });
+
+      const asyncGuard = hctx.newMid(async () => {
+        await new Promise(r => setTimeout(r, 100));
+        midLog.push("BLOCKED:async");
+        document.getElementById("mid-log").textContent = midLog.join(", ");
+        return false;
+      });
+
+      hctx.newCtx("midDemo", () => ({
+        data: { count: 0 },
+        // Context-level middleware: applies to ALL actions and effects
+        options: { middleware: [contextLogger] },
+        actions: {
+          // Per-action middleware: sync guard blocks this action
+          guarded: {
+            handle: ({ data }) => { data.count++; },
+            middleware: [syncGuard]
+          },
+          // Per-action middleware: async guard blocks after delay
+          asyncGuarded: {
+            handle: ({ data }) => { data.count++; },
+            middleware: [asyncGuard]
+          },
+          // No per-action middleware, but context-level still runs
+          open: ({ data }) => { data.count++; }
+        },
+        effects: {
+          renderCount: ({ data, el }) => { el.textContent = data.count; }
+        }
+      }));
+
+      // --- Stores ---
+      const themeStore = hctx.newStore(() => ({ theme: "light" }));
+
+      hctx.newCtx("storeWriter", () => ({
+        data: {},
+        actions: {
+          setDark: ({ useStore }) => {
+            const store = useStore(themeStore);
+            store.theme = "dark"; // mutable in actions
+          },
+          setLight: ({ useStore }) => {
+            const store = useStore(themeStore);
+            store.theme = "light";
+          }
+        },
+        effects: {}
+      }));
+
+      hctx.newCtx("storeReader", () => ({
+        data: {},
+        actions: {},
+        effects: {
+          applyTheme: {
+            handle: ({ el, useStore }) => {
+              const store = useStore(themeStore);
+              el.textContent = store.theme;
+            },
+            // Store subscription: watches themeStore.theme
+            subscribe: ({ add, useStore }) => {
+              const store = useStore(themeStore);
+              add(store, "theme");
+            }
+          }
+        }
+      }));
+
+      // --- Props ---
+      hctx.newCtx("propsDemo", () => ({
+        data: { total: 0 },
+        actions: {
+          // "props" is the second argument — parsed from the JSON in the attribute
+          count: {
+            handle: ({ data }, props) => {
+              data.total += props.step ?? 1;
+            }
+          }
+        },
+        effects: {
+          renderTotal: ({ data, el }) => { el.textContent = data.total; }
+        }
+      }));
+
+      // --- Execute (re-execution) ---
+      const iterEl = document.getElementById("exec-iterations");
+      hctx.newCtx("executeDemo", () => ({
+        data: { count: 0 },
+        actions: {
+          poll: {
+            handle: async ({ data, execute }) => {
+              data.count++;
+              // Fire-and-forget: don't await. The delay ensures re-execution
+              // runs after this action's .then() chain (cleanup + subscribers).
+            await execute("polling", 500, (counter) => {
+                iterEl.textContent = "Iteration " + counter;
+              }, 3);
+            }
+          }
+        },
+        effects: {
+          renderPoll: ({ data, el }) => { el.textContent = data.count; }
+        }
+      }));
+
+      // --- onCleanup ---
+      hctx.newCtx("cleanupDemo", () => ({
+        data: { ticks: 0 },
+        actions: {
+          removeTimer: {
+            handle: () => {
+              // Remove the timer element — triggers cleanup via MutationObserver
+              const el = document.querySelector("[hctx='cleanupDemo'] p");
+              if (el) el.remove();
+            },
+            useRawElement: true
+          }
+        },
+        effects: {
+          startTimer: {
+            handle: ({ data, el, onCleanup }) => {
+              const id = setInterval(() => {
+                data.ticks++;
+                el.textContent = "Ticks: " + data.ticks;
+              }, 500);
+              // Cleanup: clear interval when element is removed from DOM
+              onCleanup(async () => {
+                clearInterval(id);
+                console.log("Timer cleaned up!");
+              });
+            },
+            // Effects get the live element by default, and we need it for the interval
+            allowStateMutations: true
+          }
+        }
+      }));
+
+      // --- useRawElement ---
+      hctx.newCtx("rawDemo", () => ({
+        data: {},
+        actions: {
+          // Default: gets a cloned element — mutations don't reach the DOM
+          mutateClone: ({ el }) => {
+            el.style.border = "3px solid red"; // affects the clone only
+          },
+          // useRawElement: gets the live element
+          mutateRaw: {
+            handle: ({ el }) => {
+              el.style.border = "3px solid green"; // affects the real DOM
+            },
+            useRawElement: true
+          }
+        },
+        effects: {}
+      }));
+
+      // --- hc:mutated ---
+      hctx.newCtx("dynamicDemo", () => ({
+        data: { count: 0 },
+        actions: {
+          addElement: {
+            handle: ({ data }) => {
+              data.count++;
+              const el = document.createElement("p");
+              el.setAttribute("hc-effect", "render on hc:mutated");
+              document.getElementById("dynamic-container").appendChild(el);
+            },
+            useRawElement: true
+          }
+        },
+        effects: {
+          render: ({ data, el }) => {
+            el.textContent = "Dynamic element — count=" + data.count;
+          }
+        }
+      }));
+
+      hctx.start();
+    });
+  </script>
+</body>
+</html>
