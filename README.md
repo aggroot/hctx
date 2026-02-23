@@ -125,6 +125,29 @@ effects: {
 - **Cleanup**: `onCleanup` callbacks for resource management, auto-called on element removal
 - **Re-execution**: actions can re-trigger themselves with delay and iteration control
 
+## Using with lit-html
+
+Effects receive the live DOM element, so you can use lit-html as the rendering engine while hctx owns the state and reactivity:
+
+```js
+import { html, render } from "lit-html";
+
+effects: {
+  renderItems: {
+    handle: ({ data, el }) => {
+      render(html`
+        <ul>
+          ${data.items.map(i => html`<li>${i}</li>`)}
+        </ul>
+      `, el);
+    },
+    subscribe: ({ add, data }) => { add(data, "items"); }
+  }
+}
+```
+
+You get lit-html's efficient template diffing instead of raw `innerHTML`, with no conflict between the two libraries.
+
 ## Installation
 
 ```bash

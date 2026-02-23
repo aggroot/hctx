@@ -288,6 +288,27 @@ effects: {
 <span hc-effect="render on a:increment">0</span>
 ```
 
+### Using with lit-html
+
+Effects receive the live DOM element, so you can use lit-html as the rendering engine inside effects:
+
+```js
+import { html, render } from "lit-html";
+
+effects: {
+  renderItems: {
+    handle: ({ data, el }) => {
+      render(html`
+        <ul>
+          ${data.items.map(i => html`<li>${i}</li>`)}
+        </ul>
+      `, el);
+    },
+    subscribe: ({ add, data }) => { add(data, "items"); }
+  }
+}
+```
+
 ---
 
 ## 6. Attribute DSL
