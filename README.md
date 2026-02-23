@@ -127,6 +127,8 @@ effects: {
 
 ## Using with lit-html
 
+[![lit-html Bundle Size](https://deno.bundlejs.com/badge?q=lit-html@3.3.2)](https://bundlejs.com/?q=lit-html%403.3.2)
+
 Effects receive the live DOM element, so you can use lit-html as the rendering engine while hctx owns the state and reactivity:
 
 ```js
