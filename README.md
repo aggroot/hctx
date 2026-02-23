@@ -1,5 +1,7 @@
 # hctx
 
+[![Bundle Size](https://deno.bundlejs.com/badge?q=hctx@0.1.0)](https://deno.bundlejs.com/result?q=hctx@0.1.0)
+
 A tiny language framework for embedding JavaScript in hypermedia.
 
 ~4.8KB gzipped. Zero dependencies. Full TypeScript support.
